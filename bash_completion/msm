@@ -46,6 +46,13 @@ _msm() {
 					options="list create delete rename"
 				else
 					case "${COMP_WORDS[2]}" in
+						create)
+							manager_property JAR_STORAGE_PATH
+							if [[ $COMP_CWORD == 4 && -d "$SETTINGS_JAR_STORAGE_PATH" ]]; then
+								options="$(ls -1 "$SETTINGS_JAR_STORAGE_PATH")"
+							fi
+							;;
+
 						delete|rename)
 							if [[ $COMP_CWORD == 3 && -d "$SETTINGS_SERVER_STORAGE_PATH" ]]; then
 								options="$(ls -1 "$SETTINGS_SERVER_STORAGE_PATH")"
