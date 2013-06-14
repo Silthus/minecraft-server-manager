@@ -962,11 +962,14 @@ jargroup_list() {
 # Creates a new jargroup
 # $1: The name for the jargroup
 # $2: The URL target for the jargroup
+# $3: Optionally a version to associate with this jargroup. If blank/not a
+# valid version file, this is not set.
 jargroup_create() {
 	if is_valid_name "$1"; then
 		manager_property JAR_STORAGE_PATH
 		manager_property USERNAME
 		manager_property JARGROUP_TARGET
+		manager_property JARGROUP_VERSION
 
 		if [[ ! -d "$SETTINGS_JAR_STORAGE_PATH/$1" ]]; then
 			echo -n "Creating jar group... "
@@ -981,6 +984,24 @@ jargroup_create() {
 			if [[ "$error" != "" ]]; then
 				echo "Failed."
 				error_exit FILE_NOT_FOUND "$error"
+			fi
+
+			if [[ ! -z "$3" ]]; then
+				local v valid_version
+				for ((v=0; v<$VERSIONS_COUNT; v++)); do
+					if [[ "$3" == "${VERSIONS[$v]}" ]]; then
+						valid_version="true"
+					fi
+				done
+
+				if [[ "$valid_version" == "true" ]]; then
+					error="$(as_user "$SETTINGS_USERNAME" "echo \"$3\" > \"$SETTINGS_JAR_STORAGE_PATH/$1/$SETTINGS_JARGROUP_VERSION\"")"
+					if [[ "$error" != "" ]]; then
+						msm_warning "Unable to set version \"$3\" for jargroup \"$1\"."
+					fi
+				else
+					msm_warning "\"$3\" is not a valid version."
+				fi
 			fi
 			
 			echo "Done."
@@ -2373,8 +2394,10 @@ command_jargroup_list() {
 # Creates a new jar group
 # $1: The new (valid) jar group name
 # $2: The URL to use as the jar group target
+# $3: Optionally a version to associate with this jargroup. If blank/not a
+# valid version file, this is not set.
 command_jargroup_create() {
-	jargroup_create "$1" "$2"
+	jargroup_create "$1" "$2" "$3"
 }
 
 # Deletes and existing jar group
@@ -2455,7 +2478,8 @@ command_help() {
 	echo -e
 	echo -e "--Jar Commands--------------------------------------------------"
 	echo -e "  jargroup list                                 List the stored jar files."
-	echo -e "  jargroup create <name> <download-url>         Create a new jar group, with a URL for new downloads"
+	echo -e "  jargroup create <name> <download-url> \\       Create a new jar group, with a URL for new downloads"
+	echo -e "                      [<version>]                   and optionally relates a version file."
 	echo -e "  jargroup delete <name>                        Delete a jar group"
 	echo -e "  jargroup rename <name> <new-name>             Rename a jar group"
 	echo -e "  jargroup changeurl <name> <download-url>      Change the download URL for a jar group"
@@ -3186,6 +3210,7 @@ register_settings() {
 	register_setting BACKUP_ARCHIVE_PATH "/opt/msm/archives/backups"
 
 	register_setting JARGROUP_TARGET "target.txt"
+	register_setting JARGROUP_VERSION "version.txt"
 	register_setting JARGROUP_DOWNLOAD_DIR "downloads"
 	register_setting SERVER_PROPERTIES "server.properties"
 	
@@ -3596,6 +3621,7 @@ register_commands() {
 
 	register_command "jargroup list" "command_jargroup_list"
 	register_command "jargroup create <name> <string>" "command_jargroup_create"
+	register_command "jargroup create <name> <string> <string>" "command_jargroup_create"
 	register_command "jargroup delete <name>" "command_jargroup_delete"
 	register_command "jargroup rename <name> <name>" "command_jargroup_rename"
 	register_command "jargroup changeurl <name> <string>" "command_jargroup_changeurl"
