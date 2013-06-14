@@ -1041,6 +1041,36 @@ jargroup_changeurl() {
 	fi
 }
 
+# Changes an existing jargroups linked version
+# $1: The jargroup name to change the version
+# $2: The new version to set
+jargroup_changeversion() {
+	manager_property JAR_STORAGE_PATH
+	manager_property USERNAME
+	manager_property JARGROUP_VERSION
+
+	echo -n "Changing linked version... "
+
+	local target="$SETTINGS_JAR_STORAGE_PATH/$1/$SETTINGS_JARGROUP_VERSION"
+
+	if [[ -d "$SETTINGS_JAR_STORAGE_PATH/$1" ]]; then
+		if is_valid_version "$2"; then
+			error="$(as_user "$SETTINGS_USERNAME" "echo \"$2\" > \"${target}\"")"
+			if [[ "$error" != "" ]]; then
+				error_exit FILE_NOT_FOUND "Could not update target file \"${target}\""
+			fi
+			echo "Done."
+		else
+			echo "Failed."
+			error_exit NAME_NOT_FOUND "\"$2\" is not a valid version."
+		fi
+	else
+		echo "Failed."
+		error_exit NAME_NOT_FOUND "There is no jar group with the name \"$1\"."
+	fi
+
+}
+
 # Downloads the latest version for a jargroup, using the target URL for that
 # group. Saves the download with the date and time encoded in the start of the
 # file name, in the jar group directory in question. Removes the file if there
@@ -2429,6 +2459,13 @@ command_jargroup_changeurl() {
 	jargroup_changeurl "$1" "$2"
 }
 
+# Changes an existing jargroups linked version
+# $1: The jargroup name to change the version
+# $2: The new version to set
+command_jargroup_changeversion() {
+	jargroup_changeversion "$1" "$2"
+}
+
 # Downloads the latest jar for a jar group
 # $1: The name of the jar group
 command_jargroup_getlatest() {
@@ -2492,6 +2529,7 @@ command_help() {
 	echo -e "  jargroup delete <name>                        Delete a jar group"
 	echo -e "  jargroup rename <name> <new-name>             Rename a jar group"
 	echo -e "  jargroup changeurl <name> <download-url>      Change the download URL for a jar group"
+	echo -e "  jargroup changeversion <name> <version>       Change the version linked to a jar group"
 	echo -e "  jargroup getlatest <name>                     Download the latest jar file for a jar group"
 	echo -e
 	echo -e "--Global Commands-----------------------------------------------"
@@ -3634,6 +3672,7 @@ register_commands() {
 	register_command "jargroup delete <name>" "command_jargroup_delete"
 	register_command "jargroup rename <name> <name>" "command_jargroup_rename"
 	register_command "jargroup changeurl <name> <string>" "command_jargroup_changeurl"
+	register_command "jargroup changeversion <name> <string>" "command_jargroup_changeversion"
 	register_command "jargroup getlatest <name>" "command_jargroup_getlatest"
 
 	register_command "help" "command_help"
