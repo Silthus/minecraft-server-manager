@@ -255,6 +255,22 @@ is_valid_name() {
 	fi
 }
 
+# Determines whether "$1" is a valid version, as defined by one of the files in
+# VERSIONING_STORAGE_PATH. It should be in the format of "type/version", i.e.
+# "minecraft/1.2.0"
+# $1: The version to check
+is_valid_version() {
+
+	local v
+	for ((v=0; v<$VERSIONS_COUNT; v++)); do
+		if [[ "$1" == "${VERSIONS[$v]}" ]]; then
+			return 0
+		fi
+	done
+
+	return 1
+}
+
 # Gets the latest jar from a jar group, based upon the date and time encoded
 # in the file name.
 # $1: The directory to search
@@ -987,14 +1003,7 @@ jargroup_create() {
 			fi
 
 			if [[ ! -z "$3" ]]; then
-				local v valid_version
-				for ((v=0; v<$VERSIONS_COUNT; v++)); do
-					if [[ "$3" == "${VERSIONS[$v]}" ]]; then
-						valid_version="true"
-					fi
-				done
-
-				if [[ "$valid_version" == "true" ]]; then
+				if is_valid_version "$3"; then
 					error="$(as_user "$SETTINGS_USERNAME" "echo \"$3\" > \"$SETTINGS_JAR_STORAGE_PATH/$1/$SETTINGS_JARGROUP_VERSION\"")"
 					if [[ "$error" != "" ]]; then
 						msm_warning "Unable to set version \"$3\" for jargroup \"$1\"."
