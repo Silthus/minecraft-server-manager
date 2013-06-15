@@ -1649,6 +1649,7 @@ server_backup() {
 # $3: Optionally, a specific jar to use.
 server_set_jar() {
 	manager_property JAR_STORAGE_PATH
+	manager_property JARGROUP_VERSION
 	server_property "$1" JAR_PATH
 	server_property "$1" USERNAME
 
@@ -1673,6 +1674,14 @@ server_set_jar() {
 		if [[ ! -z "$jar" ]]; then
 			as_user "${SERVER_USERNAME[$1]}" "ln -sf \"$jar\" \"${SERVER_JAR_PATH[$1]}\""
 			echo "Server \"${SERVER_NAME[$1]}\" is now using \"$jar\"."
+		fi
+
+		local version_file="$SETTINGS_JAR_STORAGE_PATH/$2/$SETTINGS_JARGROUP_VERSION"
+		if [[ -e "$version_file" ]]; then
+			local version="$(cat "${version_file}")"
+			command_server_config "$1" "msm-version" "$version"
+			
+			echo "Server \"${SERVER_NAME[$1]}\" is set to use version \"$version\"."
 		fi
 	else
 		error_exit NAME_NOT_FOUND "There is no jargroup named \"$2\"."
