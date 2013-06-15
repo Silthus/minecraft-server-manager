@@ -957,6 +957,7 @@ server_set_active() {
 # Lists the jar files grouped by jar groups.
 jargroup_list() {
 	manager_property JAR_STORAGE_PATH
+	manager_property JARGROUP_VERSION
 
 	if [[ -d "${SETTINGS_JAR_STORAGE_PATH}" ]]; then
 		local jargroup_name
@@ -971,6 +972,12 @@ jargroup_list() {
 					echo "    $jar_name"
 				fi
 			done < <(find "${SETTINGS_JAR_STORAGE_PATH}/${jargroup_name}" -mindepth 1 -maxdepth 1 -type f -print0)
+
+			local version_file="$SETTINGS_JAR_STORAGE_PATH/$jargroup_name/$SETTINGS_JARGROUP_VERSION"
+			if [[ -e "$version_file" ]]; then
+				local version="$(cat "${version_file}")"
+				echo "    Version: \"$version\"."
+			fi
 		done < <(find "${SETTINGS_JAR_STORAGE_PATH}" -mindepth 1 -maxdepth 1 -type d -print0)
 	fi
 }
