@@ -1785,6 +1785,7 @@ server_property() {
 
 			if [[ -f "${SERVER_VERSION_CONF[$1]}" ]]; then
 				VERSIONING_SERVER_ID="$1"
+				eval SERVER_CONSOLE_PROPERTY_COUNT[$VERSIONING_SERVER_ID]=0
 				source "${SERVER_VERSION_CONF[$1]}"
 				unset VERSIONING_SERVER_ID
 				SERVER_VERSIONING_LOADED[$1]="true"
@@ -4032,20 +4033,16 @@ console_event() {
 
 # Defines the properties that will be set upon server creation,
 # VERSIONING_SERVER_ID must be set before calling this function
+# SERVER_CONSOLE_PROPERTY_COUNT must be initialized as well.
 # $1: The name of the property
 # $2: The value of the property to be set
 console_property() {
-	# Ensure default is in place for each server
-	if [[ -z ${SERVER_CONSOLE_PROPERTY_COUNT[$VERSIONING_SERVER_ID]} ]]; then
-		SERVER_CONSOLE_PROPERTY_COUNT[$VERSIONING_SERVER_ID]=0
-	fi
-
 	# Escape the value.
 	local value=${2//\//\\\/}
 
 	# Set server variable
 	eval SERVER_CONSOLE_PROPERTY_${SERVER_CONSOLE_PROPERTY_COUNT[$VERSIONING_SERVER_ID]}[$VERSIONING_SERVER_ID]=\"$1=$value\"
-	SERVER_CONSOLE_PROPERTY_COUNT[$VERSIONING_SERVER_ID]=$(( ${SERVER_CONSOLE_PROPERTY_COUNT[$VERSIONING_SERVER_ID]} + 1 ))
+	eval SERVER_CONSOLE_PROPERTY_COUNT[$VERSIONING_SERVER_ID]=$(( ${SERVER_CONSOLE_PROPERTY_COUNT[$VERSIONING_SERVER_ID]} + 1 ))
 }
 
 # Defines a servers console command variables, VERSIONING_SERVER_ID
