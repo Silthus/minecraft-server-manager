@@ -1651,7 +1651,6 @@ server_set_jar() {
 	manager_property JARGROUP_VERSION
 	server_property "$1" JAR_PATH
 	server_property "$1" USERNAME
-	server_property "$1" CONSOLE_PROPERTY
 
 	if [ -d "$SETTINGS_JAR_STORAGE_PATH/$2" ]; then
 		
@@ -1683,6 +1682,7 @@ server_set_jar() {
 			
 			echo "Server \"${SERVER_NAME[$1]}\" is set to use version \"$version\"."
 
+			server_property "$1" CONSOLE_PROPERTY
 			for ((i=0; i<${SERVER_CONSOLE_PROPERTY_COUNT[$1]}; i++)); do
 				name=$(eval echo "\${SERVER_CONSOLE_PROPERTY_$i[$1]}" | cut -d'=' -f1)
 				value=$(eval echo "\${SERVER_CONSOLE_PROPERTY_$i[$1]}" | cut -d'=' -f2-)
