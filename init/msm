@@ -2522,6 +2522,7 @@ command_help() {
 	echo -e "  <server> backup                               Makes a backup of an entire server directory"
 	echo -e "  <server> jar <jargroup> [<file>]              Sets a server's jar file"
 	echo -e "  <server> console                              Connects to the interactive console. Access may be limited"
+  echo -e "  <server> tail                                 Tails the server log. Another way to see whats going on besides the console."
 	echo -e "  <server> config [<setting> <value>]           Lists server settings, or sets a specific setting."
 	echo -e
 	echo -e "--Server Pass Through Commands----------------------------------"
@@ -2695,6 +2696,14 @@ command_server_worlds_off() {
 # $1: The server ID
 command_server_logroll() {
 	server_log_roll "$1"
+}
+
+# raidcraft commands
+
+# Tails the server log with less
+# $1: The server ID
+command_server_tail() {
+  server_log_tail "$1"
 }
 
 # Makes a backup of an entire server directory
@@ -3730,6 +3739,7 @@ register_commands() {
 	register_command "<name:server> jar <name>" "command_server_jar"
 	register_command "<name:server> jar <name> <string>" "command_server_jar"
 	register_command "<name:server> console" "command_server_console"
+  register_command "<name:server> tail" "command_server_tail"
 	register_command "<name:server> config" "command_server_config"
 	register_command "<name:server> config <string>" "command_server_config"
 	register_command "<name:server> config <string> <string>" "command_server_config"
@@ -4085,6 +4095,18 @@ console_command() {
 
 ### RaidCraft Functions to update the server via git
 ### ------------------------------------------------
+
+# Tails the server log as an alternate way to see whats going on
+# $1: The ID of the server
+server_log_tail() {
+	server_property "$1" LOG_PATH
+	server_property "$1" USERNAME
+  
+	# Creates the server log if not already present. Prevents errors.
+	as_user "${SERVER_USERNAME[$1]}" "touch \"${SERVER_LOG_PATH[$1]}\""
+  # tails the server logg with less
+  as_user "${SERVER_USERNAME[$1]}" "less +F \"${SERVER_LOG_PATH[$1]}\""
+}
 
 # updates the server via git and maven
 command_server_update() {
