@@ -1954,7 +1954,7 @@ manager_stop_all_servers() {
 				if server_is_running "$server"; then
 					stop_tick="$(( ${max_countdown} - ${SERVER_STOP_DELAY[$server]} ))"
 					if [[ "$stop_tick" == "$tick" ]]; then
-						server_command "$server" STOP
+						server_stop_now "$server"
 						STOP_COUNTDOWN[$server]="false"
 					fi
 				fi
@@ -1997,7 +1997,7 @@ manager_stop_all_servers_now() {
 			was_running[$server]="true"
 			any_running="true"
 			echo "Server \"${SERVER_NAME[$server]}\" was running, now stopping."
-			server_command "$server" STOP
+			server_stop_now "$server"
 		else
 			echo "Server \"${SERVER_NAME[$server]}\" was NOT running."
 			was_running[$server]="false"
@@ -3274,6 +3274,10 @@ register_settings() {
 	register_setting VERSIONING_FILE_EXTENSION "sh"
 	register_setting RAMDISK_STORAGE_ENABLED "true"
 	register_setting RAMDISK_STORAGE_PATH "/dev/shm/msm"
+  # raidcraft global config settings
+  register_setting GLOBAL_CONFIG_PATH "/opt/msm/global_configs"
+  register_setting GLOBAL_GIT_URL "ssh://git@git.raid-craft.de:22109/server/servers.git"
+  register_setting GLOBAL_GIT_BRANCH "master"
 
 	register_setting UPDATE_URL "https://raw.github.com/marcuswhybrow/minecraft-server-manager/latest"
 
@@ -3300,6 +3304,10 @@ register_settings() {
 	register_server_setting OPS_PATH "ops.txt"
 	register_server_setting OPS_LIST ""
 	register_server_setting JAR_PATH "server.jar"
+  # raidcraft settings
+  register_server_setting PLUGIN_PATH "plugins"
+  register_server_setting GIT_URL "ssh://git@git.raid-craft.de:22109/server/servers.git"
+  register_server_setting GIT_BRANCH "master"
 
 	register_server_setting FLAG_ACTIVE_PATH "active"
 	register_server_setting COMPLETE_BACKUP_FOLLOW_SYMLINKS "false"
@@ -4075,6 +4083,69 @@ console_command() {
 }
 
 
+### RaidCraft Functions to update the server via git
+### ------------------------------------------------
+
+# updates the server via git and maven
+command_server_update() {
+	if server_is_running "$1"; then
+		server_stop "$1"
+	fi
+  command_server_update_now
+}
+
+command_server_update_now() {
+  # first stop the server if it is running
+  if server_is_running "$1"; then
+		server_stop_now "$1"
+	fi
+  
+  manager_property GLOBAL_CONFIG_PATH
+  manager_property GLOBAL_GIT_URL
+  manager_property GLOBAL_GIT_BRANCH
+  
+  server_property "$1" PLUGIN_PATH
+	server_property "$1" USERNAME
+  server_property "$1" GIT_URL
+	server_property "$1" GIT_BRANCH
+  
+	# Creates a plugin folder if not already present
+  if [ ! -d "${SERVER_PLUGIN_PATH[$1]}" ]; then
+    as_user "${SERVER_USERNAME[$1]}" "git clone -b ${SERVER_GIT_BRANCH[$1]} ${SERVER_GIT_URL[$1]} ${SERVER_PLUGIN_PATH[$1]}"
+  fi
+  # removes all symbolic links in the plugin directory
+  as_user "${SERVER_USERNAME[$1]}" "find ${SERVER_PLUGIN_PATH[$1]} -maxdepth 1 -type l -exec rm -f {} \\;"
+  # removes all jar files
+  as_user "${SERVER_USERNAME[$1]}" "rm ${SERVER_PLUGIN_PATH[$1]}/*.jar"
+  # now lets stash and update
+  as_user "${SERVER_USERNAME[$1]}" "cd \"${SERVER_PLUGIN_PATH[$1]}\" && git stash save && git pull origin ${SERVER_GIT_BRANCH[$1]} && git stash pop"
+  # now we need to change the version if specified
+  if [ "$2" == RELEASE ]; then 
+    as_user "${SERVER_USERNAME[$1]}" "cd \"${SERVER_PLUGIN_PATH[$1]}\" && latest_version=$(git describe --abbrev=0 --tags) && git checkout ${latest_version}"
+  elif [ "$2" != LATEST ]; then
+    if [ verify_git_ref "$2" ]
+      as_user "${SERVER_USERNAME[$1]}" "cd \"${SERVER_PLUGIN_PATH[$1]}\" && git checkout ${GIT_TAG_OR_REF}"
+    fi
+  else
+    as_user "${SERVER_USERNAME[$1]}" "cd \"${SERVER_PLUGIN_PATH[$1]}\" && git checkout HEAD"
+  fi
+  # recreate all symlinks from the global config dir
+  as_user "${SERVER_USERNAME[$1]}" "ln -s $SETTINGS_GLOBAL_CONFIG_PATH/* ${SERVER_PLUGIN_PATH[$1]}"
+  # download and build all plugins
+  as_user "${SERVER_USERNAME[$1]}" "cd \"${SERVER_PLUGIN_PATH[$1]}\" && mvn -U validate"
+}
+
+verify_git_ref() {
+    echo "Verifying git tag or commit: \"$1\" ...."
+    if git branch -r --contains $(git rev-parse $1) | grep origin>/dev/null 2>&1
+    then
+        log_success "Git tag or commit \"$1\" verified...."
+        GIT_TAG_OR_REF=$1
+        return 0
+    else
+        error_exit INVALID_ARGUMENT "\"$1\" is not a valid tag or commit that has been pushed, you must use a valid tag or commit in order for this script to continue"
+    fi
+}
 
 
 
