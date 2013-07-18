@@ -4145,7 +4145,7 @@ command_server_update_now() {
   if [ "$2" == RELEASE ]; then 
     as_user "${SERVER_USERNAME[$1]}" "cd \"${SERVER_PLUGIN_PATH[$1]}\" && latest_version=$(git describe --abbrev=0 --tags) && git checkout ${latest_version}"
   elif [ "$2" != LATEST ]; then
-    if [ verify_git_ref "$2" ]
+    if [ verify_git_ref "$2" ]; then
       as_user "${SERVER_USERNAME[$1]}" "cd \"${SERVER_PLUGIN_PATH[$1]}\" && git checkout ${GIT_TAG_OR_REF}"
     fi
   else
