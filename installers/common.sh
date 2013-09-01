@@ -54,10 +54,8 @@ function install_dependencies() {
 # Verifies existence of or adds user for Minecraft server (default "minecraft")
 function add_minecraft_user() {
     install_log "Creating default user '${msm_user}'"
-    sudo useradd ${msm_user}
-    sudo usermod -s /usr/sbin/nologin ${msm_user}
-    install_log "Note that user '${msm_user}' is setup to not allow logins, to more strongly secure your server."
-    install_log "Run 'sudo usermod -s /bin/bash ${msm_user}' if you wish to change that, but if you do be sure to set a strong password for the '${msm_user}' user."
+    sudo useradd ${msm_user} \
+        --home /opt/msm
 }
 
 # Verifies existence and permissions of msm server directory (default /opt/msm)
