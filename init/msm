@@ -1376,10 +1376,6 @@ server_delete() {
 
 			read answer
 			if [[ "$answer" =~ ^(y|Y|yes)$ ]]; then
-<<<<<<< HEAD
-				# TODO: stop the server if running first
-=======
->>>>>>> upstream/master
 				server_get_id "$1"
 				local existing_id="$RETURN"
 
