@@ -54,10 +54,8 @@ function install_dependencies() {
 # Verifies existence of or adds user for Minecraft server (default "minecraft")
 function add_minecraft_user() {
     install_log "Creating default user '${msm_user}'"
-    sudo useradd ${msm_user}
-    sudo usermod -s /usr/sbin/nologin ${msm_user}
-    install_log "Note that user '${msm_user}' is setup to not allow logins, to more strongly secure your server."
-    install_log "Run 'sudo usermod -s /bin/bash ${msm_user}' if you wish to change that, but if you do be sure to set a strong password for the '${msm_user}' user."
+    sudo useradd ${msm_user} \
+        --home /opt/msm
 }
 
 # Verifies existence and permissions of msm server directory (default /opt/msm)
@@ -118,13 +116,7 @@ function install_config() {
 # Installs msm.cron into /etc/cron.d
 function install_cron() {
     install_log "Installing MSM cron file"
-    sudo install "$dl_dir/msm.cron" /etc/cron.d/msm || install_error "Couldn't install cron file"
-}
-
-# Reloads cron service (if necessary)
-function reload_cron() {
-    # OVERLOAD THIS
-    install_error "No function defined for reload_cron"
+    sudo install -m0644 "$dl_dir/msm.cron" /etc/cron.d/msm || install_error "Couldn't install cron file"
 }
 
 # Installs init script into /etc/init.d
@@ -168,7 +160,6 @@ function install_msm() {
     patch_latest_files
     install_config
     install_cron
-    reload_cron
     install_init
     enable_init
     update_msm

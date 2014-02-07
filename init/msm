@@ -154,6 +154,7 @@ error_exit() {
 		LOGS_NOT_ROLLED) code=72;;
 		CONF_ERROR) code=73;;
 		FATAL_ERROR) code=74;;
+		JAVA_NOT_INSTALLED) code=75;;
 	esac
 	
 	echo "${2:-"Unknown Error"}" 1>&2
@@ -405,12 +406,13 @@ world_backup() {
 # $1: The ID of the world
 world_activate() {
 	server_property "${WORLD_SERVER_ID[$1]}" USERNAME
+	server_property "${WORLD_SERVER_ID[$1]}" WORLD_STORAGE_PATH
 	world_property "$1" INACTIVE_PATH
 	world_property "$1" ACTIVE_PATH
 
 	if [ -d "${WORLD_INACTIVE_PATH[$1]}" ]; then
 		echo -n "Moving world \"${WORLD_NAME[$1]}\" to the active worldstorage directory... "
-		local new_path="${WORLD_ACTIVE_PATH[$1]}"
+		local new_path="${SERVER_WORLD_STORAGE_PATH[${WORLD_SERVER_ID[$1]}]}"
 		as_user "${SERVER_USERNAME[${WORLD_SERVER_ID[$1]}]}" "mkdir -p \"$new_path\" && mv \"${WORLD_INACTIVE_PATH[$1]}\" \"$new_path\""
 		echo "Done."
 	else
@@ -426,23 +428,24 @@ world_activate() {
 # $1: The ID of the world
 world_deactivate() {
 	server_property "${WORLD_SERVER_ID[$1]}" USERNAME
+	server_property "${WORLD_SERVER_ID[$1]}" WORLD_STORAGE_INACTIVE_PATH
 	world_property "$1" ACTIVE_PATH
 	world_property "$1" INACTIVE_PATH
 	world_property "$1" PATH
 
 	if server_is_running "${WORLD_SERVER_ID[$1]}"; then
-		exit_error 68 "Worlds cannot be deactivated whilst the server is running."
+		error_exit 68 "Worlds cannot be deactivated whilst the server is running."
 	else
 		if [ -d "${WORLD_ACTIVE_PATH[$1]}" ]; then
 			echo -n "Moving world \"${WORLD_NAME[$1]}\" to the inactive worldstorage directory... "
-			local new_path="${WORLD_INACTIVE_PATH[$1]}"
+			local new_path="${SERVER_WORLD_STORAGE_INACTIVE_PATH[${WORLD_SERVER_ID[$1]}]}"
 			as_user "${SERVER_USERNAME[${WORLD_SERVER_ID[$1]}]}" "mkdir -p \"$new_path\" && mv \"${WORLD_PATH[$1]}\" \"$new_path\""
 			echo "Done."
 		else
 			if [ -d "${WORLD_INACTIVE_PATH[$1]}" ]; then
 				echo "World \"${WORLD_NAME[$1]}\" is already deactivate."
 			else
-				exit_error DIR_NOT_FOUND "Directory \"${WORLD_ACTIVE_PATH[$1]}\" could not be found."
+				error_exit DIR_NOT_FOUND "Directory \"${WORLD_ACTIVE_PATH[$1]}\" could not be found."
 			fi
 		fi
 	fi
@@ -623,11 +626,40 @@ server_ensure_jar() {
 	error_exit FILE_NOT_FOUND "Could not find jar for server \"${SERVER_NAME[$1]}\": Expected \"${SERVER_JAR_PATH[$1]}\"."
 }
 
+# Read a value from the server configuration file
+# $1: The id of the server
+# $2: The setting name to read
+server_read_config() {
+	unset RETURN
+	# Convert name into upper-case with underscores
+	# msm-setting => SERVER_SETTING
+	# setting => SERVER_PROPERTIES_SETTING
+	if [[ "$2" =~ ^msm\-(.*)$ ]]; then
+		to_global_name "${BASH_REMATCH[1]}"
+	else
+		to_global_name "PROPERTIES_$2"
+	fi
+	local name="$RETURN"
+
+	# Display the value of that setting
+	unset RETURN
+	server_property "$1" "$name"
+	eval RETURN=\"\${SERVER_$name[$1]}\"
+}
+
 # Creates symbolic links in the server directory (SETTINGS_SERVER_STORAGE_PATH) for each
 # of the Minecraft worlds located in the world storage directory.
 # $1: The id of the server for which links should be ensured
 server_ensure_links() {
 	server_property "$1" USERNAME
+	server_property "$1" WORLD_STORAGE_PATH
+
+	# Ensure a directory for level-name exists in worldstorage.
+	# This allows a symlink to be created, and prevents new worlds
+	# being generated outside of worldstorage.
+	command_server_config "$1" "level-name"
+	as_user "${SERVER_USERNAME[$1]}" "mkdir -p \"${SERVER_WORLD_STORAGE_PATH[$1]}/$RETURN\""
+	server_worlds_allocate "$1"
 
 	echo -n "Maintaining world symbolic links... "
 	local start="${SERVER_WORLD_OFFSET[$1]}"
@@ -1106,7 +1138,25 @@ jargroup_getlatest() {
                                 if [[ $? != 1 ]]; then
                                     wget_opts=""
                                 fi
-				as_user "$SETTINGS_USERNAME" "wget --quiet $wget_opts --no-check-certificate --input-file='$SETTINGS_JAR_STORAGE_PATH/$1/$SETTINGS_JARGROUP_TARGET' --directory-prefix='$SETTINGS_JAR_STORAGE_PATH/$1/$SETTINGS_JARGROUP_DOWNLOAD_DIR'"
+
+                # If target contains the word 'minecraft' check JSON version file for correct filename
+                local target="$(as_user "$SETTINGS_USERNAME" "cat $SETTINGS_JAR_STORAGE_PATH/$1/$SETTINGS_JARGROUP_TARGET")"
+                if [[ "$target" == "minecraft" ]]; then
+                    printf "Checking minecraft version JSON... "
+                    local versions_url="http://s3.amazonaws.com/Minecraft.Download/versions/versions.json"
+                    local versions_file="/tmp/minecraft_versions.json"
+                    as_user "$SETTINGS_USERNAME" "wget --quiet $wget_opts --no-check-certificate -O '$versions_file' '$versions_url'"
+                    local latest_version=$(as_user "$SETTINGS_USERNAME" "cat '$versions_file' | egrep '^[[:space:]]*\"release\"' | cut -d':' -f2 | egrep -o '[[:digit:].]*'")
+                    if [[ -n "$latest_version" ]]; then
+                        local jar_url="https://s3.amazonaws.com/Minecraft.Download/versions/$latest_version/minecraft_server.$latest_version.jar"
+
+                    fi
+                fi
+                if [[ -n "$jar_url" ]]; then
+				    as_user "$SETTINGS_USERNAME" "wget --quiet $wget_opts --no-check-certificate --directory-prefix='$SETTINGS_JAR_STORAGE_PATH/$1/$SETTINGS_JARGROUP_DOWNLOAD_DIR' '$jar_url'"
+                else
+				    as_user "$SETTINGS_USERNAME" "wget --quiet $wget_opts --no-check-certificate --input-file='$SETTINGS_JAR_STORAGE_PATH/$1/$SETTINGS_JARGROUP_TARGET' --directory-prefix='$SETTINGS_JAR_STORAGE_PATH/$1/$SETTINGS_JARGROUP_DOWNLOAD_DIR'"
+                fi
 				echo "Done."
 			
 				local num_files="$(as_user "$SETTINGS_USERNAME" "ls -1 '$SETTINGS_JAR_STORAGE_PATH/$1/$SETTINGS_JARGROUP_DOWNLOAD_DIR' | wc -l")"
@@ -1326,7 +1376,10 @@ server_delete() {
 
 			read answer
 			if [[ "$answer" =~ ^(y|Y|yes)$ ]]; then
+<<<<<<< HEAD
 				# TODO: stop the server if running first
+=======
+>>>>>>> upstream/master
 				server_get_id "$1"
 				local existing_id="$RETURN"
 
@@ -1390,6 +1443,9 @@ server_start() {
 	if server_is_running "$1"; then
 		echo "Server \"${SERVER_NAME[$1]}\" is already running!"
 	else
+		if ! which java > /dev/null; then
+			error_exit JAVA_NOT_INSTALLED "Could not start server as Java is not installed."
+		fi
 		server_ensure_jar "$1"
 		server_ensure_links "$1"
 		server_worlds_to_ram "$1"
@@ -1994,8 +2050,9 @@ manager_stop_all_servers_now() {
 	# Stop all servers at the same time
 	for ((server=0; server<${NUM_SERVERS}; server++)); do
 		if server_is_running "$server"; then
-			was_running[$server]="true"
 			any_running="true"
+			was_running[$server]="true"
+
 			echo "Server \"${SERVER_NAME[$server]}\" was running, now stopping."
 			server_stop_now "$server"
 		else
@@ -2099,7 +2156,7 @@ command_stop_now() {
 # Restarts all servers
 command_restart() {
 	echo "Stopping servers:"
-	command_stop
+	manager_stop_all_servers "restart"
 	
 	echo "Starting servers:"
 	command_start
@@ -2108,7 +2165,7 @@ command_restart() {
 # Restarts all servers without delay
 command_restart_now() {
 	echo "Stopping servers:"
-	command_stop_now
+	manager_stop_all_servers_now
 	
 	echo "Starting servers:"
 	command_start
@@ -3208,20 +3265,8 @@ command_server_config() {
 
 	# If only a setting name is given
 	if [ ! -z "$2" ]; then
-
-		# Convert name into upper-case with underscores
-		# msm-setting => SERVER_SETTING
-		# setting => SERVER_PROPERTIES_SETTING
-		if [[ "$2" =~ ^msm\-(.*)$ ]]; then
-			to_global_name "${BASH_REMATCH[1]}"
-		else
-			to_global_name "PROPERTIES_$2"
-		fi
-		local name="$RETURN"
-
-		# Display the value of that setting
-		server_property "$1" "$name"
-		eval echo \"\${SERVER_$name[$1]}\"
+		server_read_config "$1" "$2"
+		echo "$RETURN"
 	fi
 
 	# If no paramter name is given
@@ -3556,14 +3601,14 @@ call_command() {
 
 						if [[ "$sid" -eq "-1" ]]; then
 							# Server id not set yet
-							exit_error 1 "Ill-defined command $*. Please file an issue by opening the following link: https://github.com/marcuswhybrow/minecraft-server-manager/issues"
+							error_exit 1 "Ill-defined command $*. Please file an issue by opening the following link: https://github.com/marcuswhybrow/minecraft-server-manager/issues"
 						fi
 
 						if [[ "$sid" -eq "-2" ]]; then
 							if [[ "$specified_name" == "all" ]]; then
 								wid="world:all"
 							else
-								exit_error INVALID_ARGUMENT "When specifying \"all\" servers, \"all\" worlds must be specified also."
+								error_exit INVALID_ARGUMENT "When specifying \"all\" servers, \"all\" worlds must be specified also."
 							fi
 						fi
 
