@@ -1,4 +1,4 @@
-BASE_URL="https://raw.github.com/marcuswhybrow/minecraft-server-manager/master/installers/"
+BASE_URL="https://raw.github.com/Silthus/minecraft-server-manager/master/installers/"
 
 function check_os() {
     if [[ -f /etc/debian_version ]]; then
